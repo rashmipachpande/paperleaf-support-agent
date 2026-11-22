@@ -336,7 +336,9 @@ class PaigeAgent:
     # ---- helpers ---------------------------------------------------------
     def _small_talk(self, text: str) -> AgentReply | None:
         if _GREETING_RX.match(text):
-            return AgentReply("Hello there! 📚 What can I help you with today?", "smalltalk")
+            if "paige" in text.lower():  # "Hey Paige!" -> short reply, no repeated intro
+                return AgentReply("Hello there! 📚 What can I help you with today?", "smalltalk")
+            return AgentReply(GREETING, "smalltalk")
         if _THANKS_RX.match(text):
             return AgentReply("You're so welcome! 📖 Happy reading — I'm here if you need anything else.", "smalltalk")
         if _BYE_RX.match(text):

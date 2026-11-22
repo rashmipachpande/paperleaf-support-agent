@@ -252,3 +252,9 @@ def test_tc48_same_issue_confirmed_twice_reuses_ticket(agent):
     other = agent.submit_ticket(agent.respond("I received the wrong book").offer, seen=seen)
     assert again.ticket_id == first.ticket_id and "already created" in again.text
     assert other.ticket_id != first.ticket_id
+
+
+@pytest.mark.parametrize("q", ["Hi", "hello", "Hey!"])
+def test_plain_greeting_gets_full_greeting(agent, q):
+    from agent import GREETING
+    assert agent.respond(q).text == GREETING

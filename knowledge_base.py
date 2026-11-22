@@ -60,6 +60,7 @@ class KBStatus:
 # Text processing
 # --------------------------------------------------------------------------
 _PHRASES = [
+    (re.compile(r"\bpay(?:ing)?\b.{0,15}\b(?:shipping|delivery|postage|courier)\b"), " delivery cost "),
     (re.compile(r"cash[\s-]*on[\s-]*delivery"), " cod "),
     (re.compile(r"pre[\s-]*orders?(ed|ing)?"), " preorder "),
     (re.compile(r"e[\s-]*books?"), " ebook "),
@@ -114,6 +115,7 @@ def _stem(word: str) -> str:
 def tokenize(text: str) -> list[str]:
     """Lower-case, normalise phrases/synonyms, drop stop-words and light-stem."""
     text = unicodedata.normalize("NFKC", str(text)).lower().replace("₹", " rs ")
+    text = re.sub(r"['’]s\b", "", text)  # "what's" -> "what"
     for pattern, replacement in _PHRASES:
         text = pattern.sub(replacement, text)
     tokens: list[str] = []

@@ -258,3 +258,35 @@ def test_tc48_same_issue_confirmed_twice_reuses_ticket(agent):
 def test_plain_greeting_gets_full_greeting(agent, q):
     from agent import GREETING
     assert agent.respond(q).text == GREETING
+
+
+# ---- review fixes -----------------------------------------------------------------
+@pytest.mark.parametrize("q", ["what's the fee for COD", "how much is the cod charge"])
+def test_cod_fee_paraphrases(agent, q):
+    reply = agent.respond(q)
+    assert reply.intent == "faq" and "₹30" in reply.text
+
+
+def test_pay_shipping_maps_to_delivery_cost(agent):
+    reply = agent.respond("Do I need to pay shipping?")
+    assert "Source: Delivery" in reply.text and "₹49" in reply.text
+
+
+@pytest.mark.parametrize(
+    "q,fact",
+    [("My order arrived broken and I'm really angry!", "48 hours"), ("I want a refund of ₹3,500 for my order.", "5 to 7")],
+)
+def test_escalations_carry_the_relevant_faq_policy(kb, settings, q, fact):
+    """The model must be shown the damaged-item / refund FAQ rows, not '(no matching entries)'."""
+    from agent import PaigeAgent
+
+    seen = {}
+
+    class Spy:
+        def generate(self, system_prompt, history, user_message):
+            seen["prompt"] = system_prompt
+            return "I'm so sorry about that. Let me help you create a support ticket."
+
+    reply = PaigeAgent(kb, settings, llm=Spy()).respond(q)
+    assert reply.offer is not None
+    assert fact in seen["prompt"] and "(no matching entries)" not in seen["prompt"]

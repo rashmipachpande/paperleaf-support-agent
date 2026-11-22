@@ -43,7 +43,14 @@ ORDER_LOOKUP_REPLY = (
     "can check its status for you.\n\n"
     "Would you like me to create a support ticket?"
 )
-LLM_DOWN_NOTICE ="Paige's AI writer is unavailable right now, so this answer comes straight from our help pages."
+# Search phrases used to find the FAQ rows for each kind of escalation.
+ESCALATION_TOPICS = {
+    "damaged_wrong": "damaged or wrong item",
+    "high_value_refund": "when will I get my refund",
+    "refund_issue": "when will I get my refund",
+    "order_issue": "how do I track my order",
+}
+LLM_DOWN_NOTICE = "Paige's AI writer is unavailable right now, so this answer comes straight from our help pages."
 GENERIC_ERROR = (
     "Oops, I lost my place in the story! 📚 Something went wrong on my side. "
     "Please try again, or ask me to create a support ticket."
@@ -164,7 +171,9 @@ def build_system_prompt(results: list[SearchResult], canary: str, escalation: gr
             + (" and sounds upset. Start with a short, sincere apology." if escalation.upset else ".")
             + " Share only the relevant policy from the entries, as general store policy and NOT as a guarantee"
             " for their specific case. Then say you can help create a support ticket so the team can follow up"
-            " (a ticket form appears below your message). Do NOT say a ticket exists yet.\n"
+            " (a ticket form appears below your message). Do NOT say a ticket exists yet."
+            " Never say you lack information, records or resources; just say the support team can look into the"
+            " details of their case.\n"
         )
     return f"""You are Paige, the friendly, warm, bookish customer-support assistant for PaperLeaf Books, an online bookstore in India. [{canary}]
 
@@ -312,6 +321,8 @@ class PaigeAgent:
 
         results = self._retrieve(text, history)
         if escalation:
+            if not results:  # extra words ("angry", "₹3,500") can hide the topic; look it up by issue type
+                results = self._escalation_context(escalation)
             return self._answer(text, history, results, escalation)
         if gr.is_ticket_request(text):
             return AgentReply(
@@ -358,6 +369,15 @@ class PaigeAgent:
             if combined:
                 results = combined
         return results
+
+    def _escalation_context(self, esc: gr.Escalation) -> list[SearchResult]:
+        """FAQ rows relevant to the kind of problem (searched in the sheet, never hardcoded answers)."""
+        for tag in esc.tags:
+            query = ESCALATION_TOPICS.get(tag)
+            found = self.kb.relevant(query) if query else []
+            if found:
+                return found[:2]
+        return []
 
     def _last_topic(self, text: str, history: list[dict]) -> str:
         previous = [m["content"] for m in history if m.get("role") == "user" and m.get("intent") in ("faq", "faq_miss", "escalation")]

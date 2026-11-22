@@ -13,12 +13,11 @@ import re
 import secrets
 import time
 from collections import OrderedDict, defaultdict, deque
-from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 import admin as admin_data
@@ -26,11 +25,10 @@ import feedback as feedback_store
 import guardrails as gr
 from agent import GREETING, GeminiClient, PaigeAgent, TicketOffer
 from book_catalog import BookCatalog
-from config import BASE_DIR, TICKET_CATEGORIES, get_settings
+from config import TICKET_CATEGORIES, get_settings
 from knowledge_base import get_knowledge_base
 
 logger = logging.getLogger(__name__)
-SITE_DIR = BASE_DIR / "site"
 
 # One-click questions shown on the page and in the chat. (Only the questions live here; answers always come from the FAQ sheet.)
 TOPICS = [
@@ -206,25 +204,28 @@ class AnalyticsOut(BaseModel):
 # --------------------------------------------------------------------------
 app = FastAPI(title="PaperLeaf Books – Paige", version="1.0.0", docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json")
 
-_CSP = (
-    "default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
-    "img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_settings().allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 
 @app.middleware("http")
 async def security(request: Request, call_next):
-    # Block cross-site POSTs (browsers always send Origin on those).
+    # Block cross-site POSTs (browsers always send Origin on those), except from the configured frontend origin(s).
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         origin = request.headers.get("origin")
-        if origin and origin.rstrip("/") != f"{request.url.scheme}://{request.headers.get('host', '')}":
+        same_origin = f"{request.url.scheme}://{request.headers.get('host', '')}"
+        allowed = {same_origin, *get_settings().allowed_origins}
+        if origin and origin.rstrip("/") not in {o.rstrip("/") for o in allowed}:
             return JSONResponse({"detail": "Cross-site request blocked."}, status_code=403)
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    if not request.url.path.startswith("/api/docs") and not request.url.path.startswith("/api/openapi"):
-        response.headers.setdefault("Content-Security-Policy", _CSP)
     return response
 
 
@@ -302,16 +303,6 @@ def send_feedback(body: FeedbackIn, request: Request) -> dict:
     return {"ok": True}
 
 
-@app.get("/", include_in_schema=False)
-def index() -> FileResponse:
-    return FileResponse(SITE_DIR / "index.html")
-
-
-@app.get("/admin", include_in_schema=False)
-def admin_page() -> FileResponse:
-    return FileResponse(SITE_DIR / "admin.html")
-
-
 # --------------------------------------------------------------------------
 # Admin dashboard: tickets, feedback and basic analytics, behind a shared passcode.
 # --------------------------------------------------------------------------
@@ -333,8 +324,7 @@ def admin_login(body: AdminLoginIn, response: Response, request: Request) -> dic
     token = secrets.token_urlsafe(32)
     _ADMIN_SESSIONS[token] = time.time() + settings.admin_session_ttl
     response.set_cookie(
-        _ADMIN_COOKIE, token, httponly=True, samesite="strict", secure=request.url.scheme == "https",
-        max_age=settings.admin_session_ttl,
+        _ADMIN_COOKIE, token, httponly=True, samesite="none", secure=True, max_age=settings.admin_session_ttl,
     )
     return {"ok": True}
 
@@ -381,7 +371,3 @@ def admin_analytics() -> dict:
         "feedback": admin_data.feedback_summary(feedback_rows),
         "trend": admin_data.daily_trend(tickets, feedback_rows),
     }
-
-
-app.mount("/assets", StaticFiles(directory=BASE_DIR / "assets"), name="assets")
-app.mount("/static", StaticFiles(directory=SITE_DIR), name="static")

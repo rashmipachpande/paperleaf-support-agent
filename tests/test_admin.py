@@ -19,7 +19,9 @@ def api(settings, monkeypatch):
         limiter.clear()
     webapp._seen_tickets.clear()
     webapp._ADMIN_SESSIONS.clear()
-    return TestClient(webapp.app), settings
+    # https base_url: the admin cookie is now SameSite=None; Secure (for the cross-origin Vercel/Render split),
+    # so it's only ever sent back over an https-looking connection.
+    return TestClient(webapp.app, base_url="https://testserver"), settings
 
 
 def login(client, passcode=PASSCODE):
@@ -135,11 +137,11 @@ def test_analytics_on_empty_data_has_no_division_errors(api):
     assert all(p["tickets"] == 0 and p["feedback"] == 0 for p in data["trend"])
 
 
-# ---------------- page + security ----------------
-def test_admin_page_loads_without_login_but_data_stays_gated(api):
+# ---------------- security ----------------
+# The /admin page itself is served by the frontend deployment now (e.g. Vercel), not this
+# API-only backend — only confirm the data routes stay gated without a session.
+def test_data_stays_gated_without_a_session(api):
     client, _ = api
-    page = client.get("/admin")
-    assert page.status_code == 200 and "/static/admin.js" in page.text
     assert client.get("/api/admin/tickets").status_code == 401
 
 

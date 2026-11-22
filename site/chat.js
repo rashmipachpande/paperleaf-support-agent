@@ -54,7 +54,7 @@
   async function api(path, body) {
     let res;
     try {
-      res = await fetch(path, body
+      res = await fetch((window.PAIGE_API_BASE || '') + path, body
         ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
         : { method: 'GET' });
     } catch {

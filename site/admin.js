@@ -21,7 +21,7 @@
   }
 
   async function api(path, opts = {}) {
-    const res = await fetch(path, { credentials: 'same-origin', ...opts });
+    const res = await fetch((window.PAIGE_API_BASE || '') + path, { credentials: 'include', ...opts });
     let data = null;
     try { data = await res.json(); } catch { /* not JSON */ }
     if (res.status === 401) { showLogin(); throw { status: 401 }; }

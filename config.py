@@ -66,6 +66,11 @@ def _get_int(name: str, default: int) -> int:
         return default
 
 
+def _get_list(name: str, default: list[str]) -> list[str]:
+    value = _get(name)
+    return [item.strip() for item in value.split(",") if item.strip()] if value else default
+
+
 @dataclass(frozen=True)
 class Settings:
     google_api_key: str = field(default="", repr=False)
@@ -82,6 +87,7 @@ class Settings:
     max_message_chars: int = 1000
     refund_handoff_threshold: int = 2000  # refunds/returns above this (₹) go to a person
     admin_session_ttl: int = 8 * 3600  # seconds an admin login stays valid
+    allowed_origins: list[str] = field(default_factory=lambda: ["http://localhost:8000"])
 
     @property
     def llm_configured(self) -> bool:
@@ -100,4 +106,5 @@ def get_settings() -> Settings:
         feedback_path=Path(_get("FEEDBACK_CSV_PATH") or BASE_DIR / "feedback.csv"),
         books_csv_path=Path(_get("BOOKS_CSV_PATH") or BASE_DIR / "books.csv"),
         admin_session_ttl=_get_int("ADMIN_SESSION_TTL_SECONDS", 8 * 3600),
+        allowed_origins=_get_list("ALLOWED_ORIGINS", ["http://localhost:8000"]),
     )

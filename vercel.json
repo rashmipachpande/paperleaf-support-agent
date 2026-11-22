@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/assets/:path*", "destination": "/assets/:path*" },
+    { "source": "/static/:path*", "destination": "/site/:path*" },
+    { "source": "/admin", "destination": "/site/admin.html" },
+    { "source": "/", "destination": "/site/index.html" }
+  ]
+}

@@ -24,15 +24,9 @@ def chat(api, message, history=None):
     return api.post("/api/chat", json={"message": message, "history": history or []})
 
 
-# ---------------- page + config ----------------
-def test_the_page_and_its_assets_are_served(api):
-    page = api.get("/")
-    assert page.status_code == 200 and "text/html" in page.headers["content-type"]
-    assert "/static/chat.js" in page.text and "PaperLeaf" in page.text
-    assert api.get("/static/chat.js").status_code == 200 and api.get("/static/styles.css").status_code == 200
-    assert api.get("/assets/logo.png").status_code == 200
-
-
+# ---------------- config + security ----------------
+# The backend is API-only (the static site is deployed separately, e.g. on Vercel) —
+# there is no "/" page or /static|/assets mount to test here any more.
 def test_config_has_the_greeting_and_nothing_secret(api, settings):
     cfg = api.get("/api/config").json()
     assert cfg["greeting"] == GREETING
@@ -43,9 +37,8 @@ def test_config_has_the_greeting_and_nothing_secret(api, settings):
 
 
 def test_security_headers(api):
-    h = api.get("/").headers
+    h = api.get("/api/config").headers
     assert h["x-content-type-options"] == "nosniff" and h["x-frame-options"] == "DENY"
-    assert "default-src 'self'" in h["content-security-policy"] and "frame-ancestors 'none'" in h["content-security-policy"]
 
 
 # ---------------- books ----------------

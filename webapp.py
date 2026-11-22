@@ -25,6 +25,7 @@ import admin as admin_data
 import feedback as feedback_store
 import guardrails as gr
 from agent import GREETING, GeminiClient, PaigeAgent, TicketOffer
+from book_catalog import BookCatalog
 from config import BASE_DIR, TICKET_CATEGORIES, get_settings
 from knowledge_base import get_knowledge_base
 
@@ -144,6 +145,14 @@ class FeedbackIn(BaseModel):
     intent: str = Field(default="", max_length=24)
 
 
+class BookOut(BaseModel):
+    title: str
+    author: str
+    price: float
+    in_stock: bool
+    description: str
+
+
 class AdminLoginIn(BaseModel):
     passcode: str = Field(max_length=200)
 
@@ -244,6 +253,13 @@ def config() -> dict:
         "ticket_categories": TICKET_CATEGORIES,
         "max_message_chars": settings.max_message_chars,
     }
+
+
+@app.get("/api/books", response_model=list[BookOut])
+def books() -> list[dict]:
+    """The sample catalog, so the homepage can show what's in stock."""
+    catalog = BookCatalog(get_settings().books_csv_path)
+    return [b.__dict__ for b in catalog.all()]
 
 
 @app.post("/api/chat", response_model=ChatOut)

@@ -48,6 +48,13 @@ def test_security_headers(api):
     assert "default-src 'self'" in h["content-security-policy"] and "frame-ancestors 'none'" in h["content-security-policy"]
 
 
+# ---------------- books ----------------
+def test_books_are_listed(api):
+    books = api.get("/api/books").json()
+    assert len(books) > 0
+    assert {"title", "author", "price", "in_stock", "description"} <= books[0].keys()
+
+
 # ---------------- chat ----------------
 def test_faq_question_is_answered_from_the_faq_with_a_source(api):
     r = chat(api, "How much does delivery cost?").json()

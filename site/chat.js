@@ -321,6 +321,25 @@
     ui.quick.replaceChildren(...state.config.quick_replies.map((q) => h('button', { class: 'chip', type: 'button', onclick: () => send(q.message) }, q.label)));
   }
 
+  async function renderBooks() {
+    const grids = document.querySelectorAll('[data-paige-books]');
+    if (!grids.length) return;
+    let books;
+    try { books = await api('/api/books'); } catch { return; }
+    grids.forEach((grid) => {
+      grid.replaceChildren(...books.map((b) => h(
+        'article', { class: 'book-card' },
+        h('h3', { class: 'book-card-title', text: b.title }),
+        h('p', { class: 'book-card-author', text: b.author }),
+        h('p', { class: 'book-card-desc', text: b.description }),
+        h('div', { class: 'book-card-foot' },
+          h('span', { class: 'book-card-price', text: `₹${b.price.toFixed(2)}` }),
+          h('span', { class: `book-card-stock ${b.in_stock ? 'in-stock' : 'out-stock'}`, text: b.in_stock ? 'In stock' : 'Out of stock' })),
+        h('button', { class: 'btn btn-secondary', type: 'button', onclick: () => { setOpen(true); send(`Is "${b.title}" available?`); } }, 'Ask Paige'),
+      )));
+    });
+  }
+
   function renderTopics() {
     document.querySelectorAll('[data-paige-topics]').forEach((grid) => {
       grid.replaceChildren(...state.config.topics.map((t) =>
@@ -380,6 +399,7 @@
     const year = document.getElementById('year');
     if (year) year.textContent = new Date().getFullYear();
     loadConfig();
+    renderBooks();
     window.PaigeChat = { open: () => setOpen(true), ask: (q) => send(q) };
   }
 

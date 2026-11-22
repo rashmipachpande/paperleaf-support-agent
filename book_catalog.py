@@ -57,6 +57,9 @@ class BookCatalog:
                     continue
             return books
 
+    def all(self) -> list[Book]:
+        return list(self._books)
+
     def find(self, query: str) -> Book | None:
         """Exact (case-insensitive) match -> substring match -> fuzzy match on title. None if nothing close."""
         if not self._books:

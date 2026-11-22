@@ -370,6 +370,27 @@ _ORDER_LOOKUP = _rx(
 )
 
 
+_BOOK_QUERY = _rx(
+    r"\b(?:is|are|do you have|got|have you got|do you (?:sell|carry|stock))\b.{0,50}\b(?:book|title|copy|copies|available|in stock)\b",
+    r"\bavailable\b.{0,20}\bbook\b|\bbook\b.{0,20}\bavailable\b",
+    r"\bhow much (?:does|is|would|do)\b.{0,50}\bcost\b",
+    r"\bprice (?:of|for)\b",
+    r"\bwhat(?:'s| is) the price\b",
+)
+_BOOK_NOUN = _rx(r"\bbook\b|\btitle\b|\bcopy\b|\bcopies\b|\bnovel\b")
+
+
+def is_book_query(text: str) -> bool:
+    """Customer is asking about a specific book's availability/price (catalog lookup), not a live order."""
+    return bool(_BOOK_QUERY.search(text))
+
+
+def mentions_book_noun(text: str) -> bool:
+    """A clear signal this is really about a book (vs. a generic 'how much does X cost' question),
+    used to decide whether an unmatched title should still offer a ticket."""
+    return bool(_BOOK_NOUN.search(text))
+
+
 def is_order_lookup(text: str) -> bool:
     """Customer wants to know about THEIR specific order (needs live tracking we don't have)."""
     return bool(_ORDER_LOOKUP.search(text))

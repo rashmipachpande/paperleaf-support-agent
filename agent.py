@@ -22,6 +22,7 @@ from typing import Protocol
 
 import guardrails as gr
 import ticket_system
+from book_catalog import BookCatalog
 from config import Settings
 from knowledge_base import KnowledgeBase, SearchResult
 
@@ -73,7 +74,7 @@ class TicketOffer:
 @dataclass
 class AgentReply:
     text: str
-    intent: str  # faq | faq_miss | escalation | out_of_scope | security | sensitive | smalltalk | invalid | ticket | error
+    intent: str  # faq | faq_miss | book_lookup | escalation | out_of_scope | security | sensitive | smalltalk | invalid | ticket | error
     sources: list[str] = field(default_factory=list)
     offer: TicketOffer | None = None
     ticket_id: str | None = None
@@ -206,11 +207,14 @@ _OPENERS = ["Happy to help! 📚", "Great question!", "Here's what I found:"]
 
 
 class PaigeAgent:
-    def __init__(self, kb: KnowledgeBase, settings: Settings, llm: LLM | None = None) -> None:
+    def __init__(
+        self, kb: KnowledgeBase, settings: Settings, llm: LLM | None = None, catalog: BookCatalog | None = None,
+    ) -> None:
         self.kb, self.settings = kb, settings
         if llm is None and settings.llm_configured:
             llm = GeminiClient(settings.google_api_key, settings.gemini_model, settings.llm_timeout_ms)
         self.llm = llm
+        self.catalog = catalog or BookCatalog(settings.books_csv_path)
         self._secrets = [settings.google_api_key, settings.app_passcode]
 
     # ---- public API ------------------------------------------------------
@@ -318,6 +322,22 @@ class PaigeAgent:
                 ORDER_LOOKUP_REPLY, "escalation",
                 offer=TicketOffer("Order issue", "normal", text, "Customer asked about a specific order"),
             )
+
+        if not escalation and gr.is_book_query(text):
+            book = self.catalog.find(text)
+            if book:
+                stock = "✅ In stock" if book.in_stock else "❌ Currently out of stock"
+                return AgentReply(
+                    f"**{book.title}** by {book.author}\n{stock} — ₹{book.price:.2f}\n{book.description}",
+                    "book_lookup", sources=["Book catalog"],
+                )
+            if gr.mentions_book_noun(text):  # a generic "how much does X cost?" falls through to the FAQ instead
+                return AgentReply(
+                    "I couldn't find that title in our catalog. 📚 I can raise a support ticket so our team can "
+                    "check availability for you.",
+                    "book_lookup",
+                    offer=TicketOffer("General question", "normal", text, "Customer asked about a book not in the catalog"),
+                )
 
         results = self._retrieve(text, history)
         if escalation:

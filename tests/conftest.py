@@ -8,15 +8,22 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from agent import LLMError, PaigeAgent  # noqa: E402
+from book_catalog import BookCatalog  # noqa: E402
 from config import Settings  # noqa: E402
 from knowledge_base import KnowledgeBase  # noqa: E402
 
 FIXTURE = Path(__file__).parent / "fixtures" / "faq_sample.csv"
+BOOK_FIXTURE = Path(__file__).parent / "fixtures" / "book_sample.csv"
 
 
 @pytest.fixture(scope="session")
 def kb():
     return KnowledgeBase.from_csv_text(FIXTURE.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="session")
+def catalog():
+    return BookCatalog(BOOK_FIXTURE)
 
 
 @pytest.fixture
@@ -43,13 +50,13 @@ class ScriptedLLM:
 
 
 @pytest.fixture
-def agent(kb, settings):
-    return PaigeAgent(kb, settings, llm=EchoLLM())
+def agent(kb, settings, catalog):
+    return PaigeAgent(kb, settings, llm=EchoLLM(), catalog=catalog)
 
 
 @pytest.fixture
-def make_agent(kb, settings):
+def make_agent(kb, settings, catalog):
     def _make(llm=None, **overrides):
-        return PaigeAgent(kb, replace(settings, **overrides), llm=llm)
+        return PaigeAgent(kb, replace(settings, **overrides), llm=llm, catalog=catalog)
 
     return _make

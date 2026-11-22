@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PaperLeaf Books – Ask Paige</title>
+    <meta name="description" content="PaperLeaf Books: new and pre-loved printed books across India. Ask Paige about delivery, payments, returns, refunds, pre-orders and gift wrapping." />
+    <meta name="theme-color" content="#2F5D44" />
+    <link rel="icon" type="image/png" href="/assets/logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="wrap header-row">
+        <a class="brand" href="/" aria-label="PaperLeaf Books home">
+          <img src="/assets/logo.png" alt="" width="44" height="44" />
+          <span class="brand-name">PaperLeaf<small>Books</small></span>
+        </a>
+        <nav aria-label="Main">
+          <a href="#topics">Help topics</a>
+          <a href="#books">Our books</a>
+          <a href="#about">About</a>
+          <button class="btn btn-primary" type="button" data-paige-open>Chat with Paige</button>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="wrap hero-grid">
+          <div>
+            <p class="eyebrow">New &amp; pre-loved printed books</p>
+            <h1>Stories worth keeping, <span>found for less.</span></h1>
+            <p class="lead">PaperLeaf Books sells new and pre-loved printed books across India. Have a question about delivery, payments, returns, refunds, pre-orders or gift wrapping? Paige, our bookish assistant, is here to help.</p>
+            <div class="cta-row">
+              <button class="btn btn-primary btn-lg" type="button" data-paige-open>Chat with Paige</button>
+              <a class="btn btn-secondary btn-lg" href="#topics">Browse help topics</a>
+            </div>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <div class="book book-1"><span>Stories<br />worth<br />keeping</span></div>
+            <div class="book book-2"><span>Found<br />for<br />less</span></div>
+            <div class="book book-3"><span>Ask<br />Paige</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="topics" class="section" aria-labelledby="topics-title">
+        <div class="wrap">
+          <p class="eyebrow">How can we help?</p>
+          <h2 id="topics-title">Pick a topic and Paige will answer</h2>
+          <p class="section-sub">Each button opens the chat and asks Paige for you. Her answers come straight from our help pages.</p>
+          <div class="topic-grid" data-paige-topics></div>
+        </div>
+      </section>
+
+      <section id="books" class="section" aria-labelledby="books-title">
+        <div class="wrap">
+          <p class="eyebrow">From our shelves</p>
+          <h2 id="books-title">A few of our books</h2>
+          <p class="section-sub">A small sample of what's in our catalog. Ask Paige about any title to check availability.</p>
+          <div class="book-grid" data-paige-books></div>
+        </div>
+      </section>
+
+      <section id="about" class="section section-alt" aria-labelledby="about-title">
+        <div class="wrap about-grid">
+          <img src="/assets/logo.png" alt="PaperLeaf Books logo" width="160" height="160" />
+          <div>
+            <p class="eyebrow">About PaperLeaf</p>
+            <h2 id="about-title">A cosy corner of the internet for readers</h2>
+            <p>PaperLeaf Books is an online bookstore that sells new and pre-loved printed books across India, for students, readers of all ages and people buying books as gifts.</p>
+            <p class="note">This is a demo bookstore. Paige can answer questions and raise support tickets, but there is no shop on this page, and all information is made up for practice.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p>© <span id="year"></span> PaperLeaf Books · A demo store. Please never share card numbers, OTPs or passwords in the chat.</p>
+      </div>
+    </footer>
+
+    <script>window.PAIGE_API_BASE = window.PAIGE_API_BASE || '';</script>
+    <script src="/static/chat.js" defer></script>
+  </body>
+</html>

@@ -5,10 +5,13 @@ services:
     plan: free
     branch: main
     buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    startCommand: uvicorn webapp:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.5
+      # The deployed Vercel frontend's origin(s), comma-separated. Update after the first Vercel deploy.
+      - key: ALLOWED_ORIGINS
+        value: http://localhost:8000
       # Secrets: Render asks for these in the dashboard (they are never stored in the repo)
       - key: GOOGLE_API_KEY
         sync: false

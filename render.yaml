@@ -9,9 +9,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.5
-      # The deployed Vercel frontend's origin(s), comma-separated. Update after the first Vercel deploy.
+      # The deployed Vercel frontend's origin(s), comma-separated.
       - key: ALLOWED_ORIGINS
-        value: http://localhost:8000
+        value: https://paperleaf-support-agent.vercel.app,http://localhost:8000
       # Secrets: Render asks for these in the dashboard (they are never stored in the repo)
       - key: GOOGLE_API_KEY
         sync: false

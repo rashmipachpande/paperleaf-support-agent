@@ -1,0 +1,15 @@
+# The backend (FastAPI) deploys separately to Render — keep Vercel from
+# auto-detecting it as a Python service and only ship the static frontend.
+*.py
+requirements.txt
+requirements-dev.txt
+render.yaml
+tickets.csv
+feedback.csv
+books.csv
+.cache/
+__pycache__/
+tests/
+.venv/
+venv/
+QA_Test_Status.md

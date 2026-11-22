@@ -80,6 +80,7 @@ class Settings:
     faq_cache_path: Path = BASE_DIR / ".cache" / "faq_cache.csv"
     max_message_chars: int = 1000
     refund_handoff_threshold: int = 2000  # refunds/returns above this (₹) go to a person
+    admin_session_ttl: int = 8 * 3600  # seconds an admin login stays valid
 
     @property
     def llm_configured(self) -> bool:
@@ -96,4 +97,5 @@ def get_settings() -> Settings:
         faq_cache_ttl=_get_int("FAQ_CACHE_TTL_SECONDS", 300),
         tickets_path=Path(_get("TICKETS_CSV_PATH") or BASE_DIR / "tickets.csv"),
         feedback_path=Path(_get("FEEDBACK_CSV_PATH") or BASE_DIR / "feedback.csv"),
+        admin_session_ttl=_get_int("ADMIN_SESSION_TTL_SECONDS", 8 * 3600),
     )

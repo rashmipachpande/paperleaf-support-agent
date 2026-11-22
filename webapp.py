@@ -7,18 +7,21 @@ feedback.py) is reused exactly as it is for the Streamlit app, so the FAQ, rules
 """
 from __future__ import annotations
 
+import hmac
 import logging
 import re
+import secrets
 import time
 from collections import OrderedDict, defaultdict, deque
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import admin as admin_data
 import feedback as feedback_store
 import guardrails as gr
 from agent import GREETING, GeminiClient, PaigeAgent, TicketOffer
@@ -70,10 +73,16 @@ class Limiter:
 chat_limit = Limiter(max_hits=20, window=60)
 ticket_limit = Limiter(max_hits=10, window=3600)
 feedback_limit = Limiter(max_hits=60, window=60)
+admin_login_limit = Limiter(max_hits=5, window=300)
 
 # Tickets already created in a browser session, so confirming the same issue twice never makes a duplicate.
 _seen_tickets: OrderedDict[str, dict] = OrderedDict()
 _SESSION = re.compile(r"^[A-Za-z0-9_\-]{8,64}$")
+
+# Admin dashboard sessions: opaque token -> expiry (epoch seconds). One process, in memory, same
+# pattern as _seen_tickets above - fine for a single shared passcode, no need for a real user store.
+_ADMIN_SESSIONS: dict[str, float] = {}
+_ADMIN_COOKIE = "admin_session"
 
 _llm: GeminiClient | None = None
 
@@ -133,6 +142,54 @@ class FeedbackIn(BaseModel):
     question: str = Field(default="", max_length=2000)
     reply: str = Field(default="", max_length=4000)
     intent: str = Field(default="", max_length=24)
+
+
+class AdminLoginIn(BaseModel):
+    passcode: str = Field(max_length=200)
+
+
+class TicketOut(BaseModel):
+    ticket_id: str
+    created_at: str
+    customer_name: str
+    customer_email: str
+    category: str
+    description: str
+    priority: str
+    status: str
+
+
+class FeedbackOut(BaseModel):
+    timestamp: str
+    rating: str
+    intent: str
+    question: str
+    reply: str
+
+
+class TicketsSummaryOut(BaseModel):
+    by_status: dict[str, int]
+    by_priority: dict[str, int]
+    by_category: dict[str, int]
+
+
+class FeedbackSummaryOut(BaseModel):
+    yes: int
+    no: int
+    yes_rate: float
+    by_intent: dict[str, int]
+
+
+class TrendPointOut(BaseModel):
+    date: str
+    tickets: int
+    feedback: int
+
+
+class AnalyticsOut(BaseModel):
+    tickets: TicketsSummaryOut
+    feedback: FeedbackSummaryOut
+    trend: list[TrendPointOut]
 
 
 # --------------------------------------------------------------------------
@@ -232,6 +289,82 @@ def send_feedback(body: FeedbackIn, request: Request) -> dict:
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
     return FileResponse(SITE_DIR / "index.html")
+
+
+@app.get("/admin", include_in_schema=False)
+def admin_page() -> FileResponse:
+    return FileResponse(SITE_DIR / "admin.html")
+
+
+# --------------------------------------------------------------------------
+# Admin dashboard: tickets, feedback and basic analytics, behind a shared passcode.
+# --------------------------------------------------------------------------
+def require_admin(request: Request) -> None:
+    token = request.cookies.get(_ADMIN_COOKIE)
+    expiry = _ADMIN_SESSIONS.get(token or "")
+    if not token or expiry is None or expiry < time.time():
+        raise HTTPException(status_code=401, detail="Please log in to the admin dashboard.")
+
+
+@app.post("/api/admin/login")
+def admin_login(body: AdminLoginIn, response: Response, request: Request) -> dict:
+    settings = get_settings()
+    if not settings.app_passcode:
+        raise HTTPException(status_code=503, detail="The admin dashboard isn't configured yet.")
+    _limit(admin_login_limit, _ip(request), "login attempts")
+    if not hmac.compare_digest(body.passcode, settings.app_passcode):
+        raise HTTPException(status_code=401, detail="Incorrect passcode.")
+    token = secrets.token_urlsafe(32)
+    _ADMIN_SESSIONS[token] = time.time() + settings.admin_session_ttl
+    response.set_cookie(
+        _ADMIN_COOKIE, token, httponly=True, samesite="strict", secure=request.url.scheme == "https",
+        max_age=settings.admin_session_ttl,
+    )
+    return {"ok": True}
+
+
+@app.post("/api/admin/logout")
+def admin_logout(response: Response, request: Request) -> dict:
+    _ADMIN_SESSIONS.pop(request.cookies.get(_ADMIN_COOKIE, ""), None)
+    response.delete_cookie(_ADMIN_COOKIE)
+    return {"ok": True}
+
+
+@app.get("/api/admin/me", dependencies=[Depends(require_admin)])
+def admin_me() -> dict:
+    return {"ok": True}
+
+
+@app.get("/api/admin/tickets", response_model=list[TicketOut], dependencies=[Depends(require_admin)])
+def admin_tickets(
+    status: str | None = Query(default=None, max_length=20),
+    priority: str | None = Query(default=None, max_length=20),
+    category: str | None = Query(default=None, max_length=60),
+    q: str | None = Query(default=None, max_length=200),
+) -> list[dict]:
+    rows = admin_data.read_tickets(get_settings().tickets_path)
+    return admin_data.filter_tickets(rows, status=status, priority=priority, category=category, q=q)
+
+
+@app.get("/api/admin/feedback", response_model=list[FeedbackOut], dependencies=[Depends(require_admin)])
+def admin_feedback(
+    rating: str | None = Query(default=None, max_length=10),
+    intent: str | None = Query(default=None, max_length=24),
+) -> list[dict]:
+    rows = admin_data.read_feedback(get_settings().feedback_path)
+    return admin_data.filter_feedback(rows, rating=rating, intent=intent)
+
+
+@app.get("/api/admin/analytics", response_model=AnalyticsOut, dependencies=[Depends(require_admin)])
+def admin_analytics() -> dict:
+    settings = get_settings()
+    tickets = admin_data.read_tickets(settings.tickets_path)
+    feedback_rows = admin_data.read_feedback(settings.feedback_path)
+    return {
+        "tickets": admin_data.tickets_summary(tickets),
+        "feedback": admin_data.feedback_summary(feedback_rows),
+        "trend": admin_data.daily_trend(tickets, feedback_rows),
+    }
 
 
 app.mount("/assets", StaticFiles(directory=BASE_DIR / "assets"), name="assets")

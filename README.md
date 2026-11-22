@@ -39,7 +39,8 @@ promises, and no false "ticket created" claims. Tickets are only confirmed after
 | `ticket_system.py` | Ticket IDs and CSV storage |
 | `config.py` | Settings from `.env` / environment / Streamlit secrets |
 | `assets/logo.png` | Logo |
-| `tests/` | 50 automated tests + `run_scenarios.py` (live) |
+| `feedback.py` | Saves the "Was this helpful?" answers to `feedback.csv` |
+| `tests/` | 83 automated tests + `run_scenarios.py` (live) |
 
 ## Setup
 
@@ -98,7 +99,7 @@ Manual checklist in the app:
 | Type a fake card number or "OTP is 123456" | Message hidden, reminder not to share |
 | Wrong passcode ×5 | Login locked for 60 s |
 
-Tickets are saved to `tickets.csv` (git-ignored).
+Tickets are saved to `tickets.csv` and 👍/👎 feedback to `feedback.csv` (both git-ignored). Three quick buttons (Delivery cost, Return policy, Track my order) sit under the chat, and every Paige reply has a "Was this helpful?" Yes/No.
 
 ## Deploy to Streamlit Community Cloud
 

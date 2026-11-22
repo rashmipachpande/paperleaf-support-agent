@@ -10,6 +10,7 @@ import uuid
 
 import streamlit as st
 
+import feedback
 import guardrails as gr
 from agent import GREETING, AgentReply, PaigeAgent, TicketOffer
 from config import AGENT_NAME, APP_NAME, LOGO_PATH, PAGE_TITLE, TICKET_CATEGORIES, get_settings
@@ -34,6 +35,12 @@ SUGGESTIONS = [
     "How long do refunds take?",
     "Can I pre-order a book?",
     "Do you offer gift wrapping?",
+]
+
+QUICK_QUESTIONS = [
+    ("🚚 Delivery cost", "How much does delivery cost?"),
+    ("↩️ Return policy", "What is your return policy?"),
+    ("📦 Track my order", "How do I track my order?"),
 ]
 
 CSS = """
@@ -80,6 +87,13 @@ div[data-testid="stChatInput"] textarea { font-family:'Lora',serif; }
 .st-key-suggestions .stButton > button { width:100%; text-align:left; border-radius:14px; padding:.55rem .9rem;
         border:1px solid var(--line); box-shadow:0 1px 4px rgba(91,64,36,.07); }
 .st-key-suggestions .stButton > button:hover { background:var(--beige); color:var(--green-d); border-color:var(--green); }
+.st-key-quick { margin-top:.4rem; }
+.st-key-quick .stButton > button { border-radius:999px; background:var(--beige); border-color:var(--line); font-weight:600;
+        box-shadow:0 1px 4px rgba(91,64,36,.08); }
+.st-key-quick .stButton > button:hover { background:var(--green); color:#FBF6EC; }
+[class*="st-key-fb_"] .stButton > button { min-height:0; padding:.05rem .65rem; font-size:.78rem; border-radius:999px;
+        border-color:var(--line); }
+[class*="st-key-fb_"] [data-testid="stCaptionContainer"] { padding-top:.25rem; }
 .ticket-card { background:#F7F0E0; border:1px dashed var(--brown); border-radius:14px; padding:.6rem .9rem; margin:.5rem 0 .2rem 0;
         color:var(--brown); font-size:.9rem; }
 .login-card { background:var(--card); border:1px solid var(--line); border-radius:22px; padding:2rem 1.6rem 1.4rem;
@@ -284,12 +298,47 @@ def stream_text(text: str):
         time.sleep(0.015)
 
 
+def give_feedback(msg_id: str, rating: str) -> None:
+    """Button callback: save 'yes'/'no' for one of Paige's replies to feedback.csv."""
+    messages = st.session_state.messages
+    idx = next((i for i, m in enumerate(messages) if m["id"] == msg_id), None)
+    if idx is None or messages[idx].get("feedback") in ("yes", "no"):
+        return
+    msg = messages[idx]
+    question = messages[idx - 1]["content"] if idx > 0 and messages[idx - 1]["role"] == "user" else ""
+    saved = feedback.save_feedback(get_settings().feedback_path, rating, question, msg["content"], msg.get("intent") or "")
+    msg["feedback"] = rating if saved else "error"
+
+
+def render_feedback(msg: dict) -> None:
+    """'Was this helpful? Yes / No' under a Paige reply."""
+    state = msg.get("feedback")
+    if state in ("yes", "no"):
+        st.caption("Thanks for your feedback! 💚")
+        return
+    with st.container(key=f"fb_{msg['id']}"):
+        c0, c1, c2, _ = st.columns([3, 1.9, 1.9, 3])
+        c0.caption("Was this helpful?" if state is None else "Couldn't save that. Try again?")
+        c1.button("👍 Yes", key=f"fb_yes_{msg['id']}", on_click=give_feedback, args=(msg["id"], "yes"))
+        c2.button("👎 No", key=f"fb_no_{msg['id']}", on_click=give_feedback, args=(msg["id"], "no"))
+
+
+def render_quick_questions() -> None:
+    """Three one-click questions under the chat."""
+    with st.container(key="quick"):
+        cols = st.columns(len(QUICK_QUESTIONS))
+        for col, (label, question) in zip(cols, QUICK_QUESTIONS):
+            col.button(label, key=f"qq_{label}", on_click=queue_prompt, args=(question,), use_container_width=True)
+
+
 def render_message(msg: dict, is_last: bool) -> None:
     avatar = PAIGE_AVATAR if msg["role"] == "assistant" else USER_AVATAR
     with st.chat_message(msg["role"], avatar=avatar):
         st.markdown(msg["content"])
         if msg.get("notice"):
             st.caption(f"ℹ️ {msg['notice']}")
+        if msg["role"] == "assistant" and msg.get("kind") != "welcome":
+            render_feedback(msg)
         if msg.get("offer") and is_last:
             render_ticket_form(msg)
 
@@ -328,25 +377,28 @@ def main() -> None:
 
     typed = st.chat_input(f"Ask {AGENT_NAME} about delivery, returns, refunds…", max_chars=settings.max_message_chars + 500)
     prompt = st.session_state.pop("queued_prompt", None) or typed
-    if prompt is None:
-        return
 
-    shown = gr.redact_sensitive(gr.normalize_input(prompt)) or "…"
-    history = llm_history()
-    user_msg = new_message("user", shown, intent=None)
-    with st.chat_message("user", avatar=USER_AVATAR):
-        st.markdown(shown)
-    with st.chat_message("assistant", avatar=PAIGE_AVATAR):
-        with st.spinner(f"{AGENT_NAME} is flipping through the pages…"):
-            reply = agent.respond(prompt, history)
-        st.write_stream(stream_text(reply.text))
-        if reply.notice:
-            st.caption(f"ℹ️ {reply.notice}")
-    user_msg["intent"] = reply.intent
-    messages.append(user_msg)
-    messages.append(reply_to_message(reply))
-    if reply.offer:
-        st.rerun()  # redraw so the ticket form appears under the newest message
+    if prompt is not None:
+        shown = gr.redact_sensitive(gr.normalize_input(prompt)) or "…"
+        history = llm_history()
+        user_msg = new_message("user", shown, intent=None)
+        with st.chat_message("user", avatar=USER_AVATAR):
+            st.markdown(shown)
+        with st.chat_message("assistant", avatar=PAIGE_AVATAR):
+            with st.spinner(f"{AGENT_NAME} is flipping through the pages…"):
+                reply = agent.respond(prompt, history)
+            st.write_stream(stream_text(reply.text))
+            if reply.notice:
+                st.caption(f"ℹ️ {reply.notice}")
+            reply_msg = reply_to_message(reply)
+            user_msg["intent"] = reply.intent
+            messages.append(user_msg)
+            messages.append(reply_msg)
+            if reply.offer:
+                st.rerun()  # redraw so the ticket form appears under the newest message
+            render_feedback(reply_msg)
+
+    render_quick_questions()
 
 
 try:

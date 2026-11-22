@@ -76,6 +76,7 @@ class Settings:
     faq_timeout: int = 10
     llm_timeout_ms: int = 20_000
     tickets_path: Path = BASE_DIR / "tickets.csv"
+    feedback_path: Path = BASE_DIR / "feedback.csv"
     faq_cache_path: Path = BASE_DIR / ".cache" / "faq_cache.csv"
     max_message_chars: int = 1000
     refund_handoff_threshold: int = 2000  # refunds/returns above this (₹) go to a person
@@ -94,4 +95,5 @@ def get_settings() -> Settings:
         faq_csv_url=_get("FAQ_CSV_URL", DEFAULT_FAQ_CSV_URL),
         faq_cache_ttl=_get_int("FAQ_CACHE_TTL_SECONDS", 300),
         tickets_path=Path(_get("TICKETS_CSV_PATH") or BASE_DIR / "tickets.csv"),
+        feedback_path=Path(_get("FEEDBACK_CSV_PATH") or BASE_DIR / "feedback.csv"),
     )

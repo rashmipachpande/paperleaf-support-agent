@@ -4,6 +4,7 @@
 
 # Customer data & caches
 tickets.csv
+feedback.csv
 .cache/
 
 # Python

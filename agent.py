@@ -32,9 +32,9 @@ GREETING = (
     "payments, returns, refunds, pre-orders, and gift wrapping. What can I help you with today?"
 )
 ABOUT_ME = (
-    "I'm Paige, PaperLeaf Books' virtual assistant! 📖 I can answer questions about delivery, payments, "
-    "orders, returns, refunds, pre-orders and gift wrapping — and connect you with our support team when "
-    "you need a person."
+    "I'm Paige, PaperLeaf Books' virtual assistant! 📖 PaperLeaf Books is an online bookstore selling new and "
+    "pre-loved printed books across India. I can answer questions about delivery, payments, orders, returns, "
+    "refunds, pre-orders and gift wrapping — and connect you with our support team when you need a person."
 )
 ORDER_LOOKUP_REPLY = (
     "Hi there! 📚 I'd be happy to help you check on your order!\n\n"
@@ -213,13 +213,26 @@ class PaigeAgent:
             return AgentReply(GENERIC_ERROR, "error")
 
     def submit_ticket(
-        self, offer: TicketOffer, *, name: str = "", email: str = "", description: str | None = None
+        self, offer: TicketOffer, *, name: str = "", email: str = "", description: str | None = None,
+        seen: dict | None = None,
     ) -> AgentReply:
-        """Create the ticket. Only reports success if it was really saved."""
+        """Create the ticket. Only reports success if it was really saved.
+
+        ``seen`` (optional, per chat session) maps (category, description) -> ticket ID so that
+        confirming the same issue twice returns the existing ticket instead of a duplicate."""
+        final_description = gr.redact_sensitive(description if description is not None else offer.description)
+        key = (offer.category, " ".join(final_description.lower().split()))
+        if seen is not None and key in seen:
+            return AgentReply(
+                "It looks like you've already created a ticket for this issue. 🎫\n\n"
+                f"Your ticket ID is **{seen[key]}**. Our team has it, so there's no need to submit it again. "
+                "Thanks for your patience!",
+                "ticket", ticket_id=seen[key],
+            )
         try:
             ticket = ticket_system.create_ticket(
                 category=offer.category,
-                description=gr.redact_sensitive(description if description is not None else offer.description),
+                description=final_description,
                 customer_name=name, customer_email=email, priority=offer.priority,
                 path=self.settings.tickets_path,
             )
@@ -228,6 +241,8 @@ class PaigeAgent:
         except Exception:
             logger.exception("Unexpected ticket error")
             return AgentReply("I couldn't save your ticket just now. Please try again in a moment. 🎫", "error")
+        if seen is not None:
+            seen[key] = ticket.ticket_id
         return AgentReply(
             "Absolutely! I've created a support ticket for you. 🎫\n\n"
             f"Your ticket ID is **{ticket.ticket_id}**.\n\n"
@@ -236,7 +251,37 @@ class PaigeAgent:
         )
 
     # ---- pipeline --------------------------------------------------------
-    def _respond(self, raw: str, history: list[dict]) -> AgentReply:
+    def _security_reply(self, text: str, issue: str, history: list[dict], depth: int) -> AgentReply:
+        """Refuse the blocked part; still help with any valid request in the same message."""
+        if depth == 0:
+            clauses = gr.split_clauses(text)
+            rest = [c for c in clauses if not gr.check_security(c)]
+            if len(clauses) > 1 and rest and len(rest) < len(clauses):
+                sub = self._respond(". ".join(rest), history, depth=1)
+                if sub.intent in ("faq", "escalation", "faq_miss"):
+                    sub.text = f"{gr.SHORT_REFUSALS.get(issue, '')} {'Here is what I can help with:' if sub.intent != 'escalation' else ''}\n\n{sub.text}".strip()
+                    return sub
+        return AgentReply(gr.REPLIES[issue], "security")
+
+    def _answer_mixed(self, text: str, history: list[dict]) -> AgentReply | None:
+        """'What is Python, and how much is delivery?' -> answer the bookstore part, decline the rest."""
+        clauses = gr.split_clauses(text)
+        if len(clauses) < 2:
+            return None
+        answerable = [c for c in clauses if self.kb.relevant(c)]
+        others = [c for c in clauses if c not in answerable]
+        if not answerable or not others:
+            return None
+        joined = ". ".join(answerable)
+        reply = self._answer(joined, history, self.kb.relevant(joined), None)
+        if any(gr.has_in_scope_terms(c) and not gr.has_out_of_scope_terms(c) for c in others):
+            note = "I don't have information on the other part of your question, so our support team is the best place for that. 📚"
+        else:
+            note = "I can only help with PaperLeaf Books questions, so I'll skip the other part. 📖"
+        reply.text = f"{note}\n\n{reply.text}"
+        return reply
+
+    def _respond(self, raw: str, history: list[dict], depth: int = 0) -> AgentReply:
         text = gr.normalize_input(raw)
         problem = gr.validate_input(text, self.settings.max_message_chars)
         if problem:
@@ -245,7 +290,7 @@ class PaigeAgent:
             return AgentReply(gr.REPLIES["sensitive_data"], "sensitive")
         issue = gr.check_security(text)
         if issue:
-            return AgentReply(gr.REPLIES[issue], "security")
+            return self._security_reply(text, issue, history, depth)
 
         small = self._small_talk(text)
         if small:
@@ -275,6 +320,10 @@ class PaigeAgent:
             )
         if results:
             return self._answer(text, history, results, None)
+        if depth == 0:
+            mixed = self._answer_mixed(text, history)
+            if mixed:
+                return mixed
 
         in_scope = gr.has_in_scope_terms(text)
         if gr.has_out_of_scope_terms(text) or not in_scope:
@@ -287,7 +336,7 @@ class PaigeAgent:
     # ---- helpers ---------------------------------------------------------
     def _small_talk(self, text: str) -> AgentReply | None:
         if _GREETING_RX.match(text):
-            return AgentReply(GREETING, "smalltalk")
+            return AgentReply("Hello there! 📚 What can I help you with today?", "smalltalk")
         if _THANKS_RX.match(text):
             return AgentReply("You're so welcome! 📖 Happy reading — I'm here if you need anything else.", "smalltalk")
         if _BYE_RX.match(text):

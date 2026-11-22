@@ -50,8 +50,22 @@ REPLIES = {
         "For your safety, please don't share card numbers, OTPs, passwords or ID numbers here — I'll never need "
         "them. 🔒 I've hidden that message. Feel free to ask your question again without those details."
     ),
+    "credentials": (
+        "Please don't share OTPs, passwords or card details with me or anyone else — I'll never ask for them. 🔒 "
+        "If you have a question about your order or payment, just ask and I'll help from there!"
+    ),
     "empty": "It looks like your message was empty. 📝 Type your question and I'll be happy to help!",
     "too_long": "That's a long one! 📜 Could you shorten your message to a few sentences so I can help properly?",
+}
+
+# One-line versions, used when a message mixes a blocked request with a valid question.
+SHORT_REFUSALS = {
+    "injection": "I can't change my role or my rules. 📖",
+    "secret_request": "I can't share keys, passwords or internal settings. 🔒",
+    "prompt_request": "I keep my internal instructions private. 📚",
+    "privacy": "I can't share anyone else's personal details or orders. 🔒",
+    "promise_request": "I'm not able to issue discount codes or free items. 📚",
+    "credentials": "Please never share OTPs, passwords or card details — I'll never ask for them. 🔒",
 }
 
 
@@ -66,6 +80,19 @@ def normalize_input(text: str | None) -> str:
     text = unicodedata.normalize("NFKC", text or "")
     text = _CONTROL.sub("", text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+_CLAUSE_SPLIT = re.compile(r"(?<=[?.!;])\s+|\s*[;,]\s*|\s+(?:and then|and also|and|also|plus|but)\s+", re.I)
+
+
+def split_clauses(text: str) -> list[str]:
+    """Split a message into its separate requests ('What is X, and how much is Y?')."""
+    parts = []
+    for piece in _CLAUSE_SPLIT.split(text):
+        piece = re.sub(r"^(?:also|and|then|plus|but)\s+", "", (piece or "").strip(" ,.;"), flags=re.I).strip()
+        if piece:
+            parts.append(piece)
+    return parts
 
 
 def validate_input(text: str, max_chars: int) -> str | None:
@@ -117,6 +144,12 @@ _PRIVACY = _rx(
     r"\b(another|other|someone else'?s|previous|last) (customer|person|user|buyer)'?s?\b.{0,40}\b(address|phone|number|email|name|details|order)",
     r"\bcustomer who (ordered|bought|purchased)\b",
     r"\bwho (else )?(ordered|bought|purchased)\b",
+    r"\b(someone|somebody) else'?s?\b.{0,20}\b(orders?|address|phone|number|email|details|purchases?|account)\b",
+    r"\b(all|every|list of all)\b.{0,15}\b(customers|users|buyers)\b",
+)
+_CREDENTIALS = _rx(
+    r"\b(give|send|share|tell|provide|type|submit|text|message|do you (need|want|require|ask for)|need my|should i (give|send|share))\b"
+    r".{0,30}\b(otp|one[- ]time (password|code)|cvv|pin|password|card number|credit card|debit card|card details)\b",
 )
 _PROMISE = _rx(
     r"\b(give|send|generate|create|issue|get|offer|grant|make)\b.{0,25}\b(me|us)\b.{0,25}\b(discount|coupon|promo|voucher|free)\b",
@@ -124,6 +157,7 @@ _PROMISE = _rx(
     r"\b(discount|coupon|promo|voucher) code\b.{0,20}\b(for me|please)\b",
     r"\b(guarantee|promise|assure|swear)\b.{0,30}\b(refund|money back|replacement|discount|free)\b",
     r"\bfree (book|books|gift|shipping|delivery)\b.{0,15}\b(please|for me|to me)\b",
+    r"\b(give|grant|issue|send)\b.{0,12}\b(discounts?|coupons?|promo codes?|vouchers?)\b",
 )
 
 
@@ -134,6 +168,7 @@ def check_security(text: str) -> str | None:
         ("identity", _IDENTITY),
         ("prompt_request", _PROMPT),
         ("secret_request", _SECRETS),
+        ("credentials", _CREDENTIALS),
         ("privacy", _PRIVACY),
         ("promise_request", _PROMISE),
     ):

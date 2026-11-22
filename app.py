@@ -138,6 +138,7 @@ def init_state() -> None:
     st.session_state.setdefault("messages", [new_message("assistant", GREETING, kind="welcome")])
     st.session_state.setdefault("my_tickets", [])
     st.session_state.setdefault("ticket_errors", {})
+    st.session_state.setdefault("ticket_keys", {})
 
 
 def new_message(role: str, content: str, **extra) -> dict:
@@ -185,11 +186,13 @@ def submit_ticket(msg_id: str) -> None:
         name=st.session_state[f"name_{msg_id}"],
         email=st.session_state[f"email_{msg_id}"],
         description=st.session_state[f"desc_{msg_id}"],
+        seen=st.session_state.ticket_keys,
     )
     if result.ticket_id:
         msg["offer"] = None
         st.session_state.ticket_errors.pop(msg_id, None)
-        st.session_state.my_tickets.append(result.ticket_id)
+        if result.ticket_id not in st.session_state.my_tickets:
+            st.session_state.my_tickets.append(result.ticket_id)
         st.session_state.messages.append(new_message("assistant", result.text, intent="ticket"))
     else:
         st.session_state.ticket_errors[msg_id] = result.text

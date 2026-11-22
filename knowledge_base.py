@@ -67,7 +67,8 @@ _PHRASES = [
     (re.compile(r"gift[\s-]*wrap\w*|\bwrap(ping|ped)?\b|\bgift\w*"), " giftwrap "),
     (re.compile(r"pin[\s-]*code|\bzip\b|postal code"), " pincode "),
     (re.compile(r"money[\s-]*back|reimburse\w*"), " refund "),
-    (re.compile(r"send(ing)? (it |them )?back"), " return "),
+    (re.compile(r"\bsend\w*\b.{0,20}\bback\b"), " return "),
+    (re.compile(r"\bsend\w*\b.{0,30}\b(home|house|doorstep|address)\b"), " delivery "),
     (re.compile(r"how (many )?(days|long)|how soon|\beta\b|time ?line"), " long "),
 ]
 _SYNONYMS = {
@@ -91,7 +92,7 @@ _STOPWORDS = set(
     these those what which who whom whose how when where why if then so as than too very just also
     there here any some please pls tell know want need like get got help kindly hello hi hey thanks
     thank wondering whether about regarding available yes no ok okay let rs rupees give let's
-    take takes taking usually actually really much many one new item items offer provide accept possible request process apply sell""".split()
+    take takes taking usually actually really much many one new item items offer provide accept possible request process apply sell buy buying bought purchase purchased""".split()
 ) - {"take", "new", "item", "sell"}  # these words do carry meaning in some FAQ questions
 _STOPWORDS.discard("get")
 
